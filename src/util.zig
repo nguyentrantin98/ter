@@ -376,3 +376,35 @@ pub const APP_KEY = L("Software\\Ter");
 pub const UNINSTALL_KEY = L("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Ter");
 pub const WINDOW_CLASS = L("TerOverlay");
 pub const START_MENU_LNK = L("\\Microsoft\\Windows\\Start Menu\\Programs\\Ter.lnk");
+
+/// Method `idx` of a COM object's vtable, cast to its signature.
+pub fn method(obj: *anyopaque, idx: usize, comptime F: type) F {
+    const vt: *const [*]const *const anyopaque = @ptrCast(@alignCast(obj));
+    return @ptrCast(@alignCast(vt.*[idx]));
+}
+
+pub fn regGetStr(sub: w.WSTR, name: w.WSTR, buf: []u16) ?[]u16 {
+    var key: w.H = null;
+    if (w.RegCreateKeyExW(HKCU, sub, 0, null, 0, 0x1, null, &key, null) != 0) return null;
+    defer _ = w.RegCloseKey(key);
+    var size: u32 = @intCast(buf.len * 2);
+    if (w.RegQueryValueExW(key, name, null, null, @ptrCast(buf.ptr), &size) != 0) return null;
+    var n: usize = size / 2;
+    while (n > 0 and buf[n - 1] == 0) n -= 1;
+    return buf[0..n];
+}
+
+pub fn regDeleteValue(sub: w.WSTR, name: w.WSTR) void {
+    var key: w.H = null;
+    if (w.RegCreateKeyExW(HKCU, sub, 0, null, 0, 0x2, null, &key, null) != 0) return;
+    _ = w.RegDeleteValueW(key, name);
+    _ = w.RegCloseKey(key);
+}
+
+/// Like regSetStr but for long values (the buffer must already end with a zero).
+pub fn regSetStrZ(sub: w.WSTR, name: w.WSTR, val: [:0]const u16) void {
+    var key: w.H = null;
+    if (w.RegCreateKeyExW(HKCU, sub, 0, null, 0, 0x2, null, &key, null) != 0) return;
+    defer _ = w.RegCloseKey(key);
+    _ = w.RegSetValueExW(key, name, 0, 1, @ptrCast(val.ptr), @intCast((val.len + 1) * 2));
+}

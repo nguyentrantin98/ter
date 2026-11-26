@@ -329,3 +329,61 @@ pub extern "kernel32" fn CreateDirectoryW(WSTR, ?*anyopaque) callconv(.winapi) B
 pub extern "kernel32" fn WriteFile(H, [*]const u8, u32, ?*u32, ?*anyopaque) callconv(.winapi) BOOL;
 pub extern "advapi32" fn RegDeleteKeyW(usize, WSTR) callconv(.winapi) i32;
 pub extern "ole32" fn CoCreateInstance(*const GUID, ?*anyopaque, u32, *const GUID, *?*anyopaque) callconv(.winapi) i32;
+
+// ---- dock
+pub const ENUMPROC = *const fn (H, LPARAM) callconv(.winapi) BOOL;
+pub const APPBARDATA = extern struct {
+    cbSize: u32 = @sizeOf(APPBARDATA),
+    hWnd: H = null,
+    uCallbackMessage: u32 = 0,
+    uEdge: u32 = 0,
+    rc: RECT = .{},
+    lParam: LPARAM = 0,
+};
+pub const BITMAP = extern struct {
+    bmType: i32 = 0,
+    bmWidth: i32 = 0,
+    bmHeight: i32 = 0,
+    bmWidthBytes: i32 = 0,
+    bmPlanes: u16 = 0,
+    bmBitsPixel: u16 = 0,
+    bmBits: ?*anyopaque = null,
+};
+pub const TRACKMOUSEEVENT = extern struct {
+    cbSize: u32 = @sizeOf(TRACKMOUSEEVENT),
+    dwFlags: u32 = 2,
+    hwndTrack: H = null,
+    dwHoverTime: u32 = 0,
+};
+pub const BLENDFUNCTION = extern struct { op: u8 = 0, flags: u8 = 0, alpha: u8 = 255, format: u8 = 1 };
+
+pub extern "user32" fn EnumWindows(ENUMPROC, LPARAM) callconv(.winapi) BOOL;
+pub extern "user32" fn GetWindow(H, u32) callconv(.winapi) H;
+pub extern "user32" fn GetWindowLongPtrW(H, i32) callconv(.winapi) usize;
+pub extern "user32" fn GetWindowThreadProcessId(H, ?*u32) callconv(.winapi) u32;
+pub extern "user32" fn FindWindowExW(H, H, ?WSTR, ?WSTR) callconv(.winapi) H;
+pub extern "user32" fn IsIconic(H) callconv(.winapi) BOOL;
+pub extern "user32" fn UpdateLayeredWindow(H, H, ?*const POINT, ?*const SIZE, H, ?*const POINT, u32, ?*const BLENDFUNCTION, u32) callconv(.winapi) BOOL;
+pub extern "user32" fn SetWindowRgn(H, H, BOOL) callconv(.winapi) i32;
+pub extern "user32" fn TrackMouseEvent(*TRACKMOUSEEVENT) callconv(.winapi) BOOL;
+pub extern "user32" fn KillTimer(H, usize) callconv(.winapi) BOOL;
+pub extern "user32" fn GetSystemMetrics(i32) callconv(.winapi) i32;
+pub extern "gdi32" fn CreateRoundRectRgn(i32, i32, i32, i32, i32, i32) callconv(.winapi) H;
+pub extern "gdi32" fn GetObjectW(H, i32, *anyopaque) callconv(.winapi) i32;
+pub extern "gdi32" fn GetDIBits(H, H, u32, u32, ?*anyopaque, *BITMAPINFOHEADER, u32) callconv(.winapi) i32;
+pub extern "kernel32" fn OpenProcess(u32, BOOL, u32) callconv(.winapi) H;
+pub extern "kernel32" fn QueryFullProcessImageNameW(H, u32, [*]u16, *u32) callconv(.winapi) BOOL;
+pub extern "kernel32" fn GetApplicationUserModelId(H, *u32, [*]u16) callconv(.winapi) i32;
+pub extern "kernel32" fn GetCurrentProcessId() callconv(.winapi) u32;
+pub extern "kernel32" fn GetTickCount64() callconv(.winapi) u64;
+pub extern "shell32" fn SHAppBarMessage(u32, *APPBARDATA) callconv(.winapi) usize;
+pub extern "shell32" fn SHCreateItemFromParsingName(WSTR, ?*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) i32;
+pub extern "shell32" fn SHEmptyRecycleBinW(H, ?WSTR, u32) callconv(.winapi) i32;
+pub extern "dwmapi" fn DwmGetWindowAttribute(H, u32, *anyopaque, u32) callconv(.winapi) i32;
+pub extern "version" fn GetFileVersionInfoSizeW(WSTR, ?*u32) callconv(.winapi) u32;
+pub extern "version" fn GetFileVersionInfoW(WSTR, u32, u32, *anyopaque) callconv(.winapi) BOOL;
+pub extern "version" fn VerQueryValueW(*const anyopaque, WSTR, *?*anyopaque, *u32) callconv(.winapi) BOOL;
+pub extern "user32" fn SetWindowDisplayAffinity(H, u32) callconv(.winapi) BOOL;
+pub extern "dwmapi" fn DwmFlush() callconv(.winapi) i32;
+pub extern "kernel32" fn QueryPerformanceCounter(*i64) callconv(.winapi) BOOL;
+pub extern "kernel32" fn QueryPerformanceFrequency(*i64) callconv(.winapi) BOOL;

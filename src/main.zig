@@ -4,6 +4,7 @@ const u = @import("util.zig");
 const apps = @import("apps.zig");
 const files = @import("files.zig");
 const term = @import("term.zig");
+const dock = @import("dock.zig");
 const L = u.L;
 
 const Mode = enum(u8) { app, file, cmd, ps };
@@ -270,8 +271,18 @@ var pos_set: bool = false;
 var pos_x: i32 = 0;
 var pos_y: i32 = 0;
 
+/// macOS-style Dock replacing the Windows taskbar.
+var dock_on: bool = true;
+
+fn setDock(on: bool) void {
+    dock_on = on;
+    u.regSetDword(APP_KEY, L("Dock"), @intFromBool(on));
+    if (on) dock.enable() else dock.disable();
+}
+
 fn loadSettings() void {
     if (u.regGetDword(APP_KEY, L("Pin"))) |v| pinned = v != 0;
+    if (u.regGetDword(APP_KEY, L("Dock"))) |v| dock_on = v != 0;
     const x = u.regGetDword(APP_KEY, L("X")) orelse return;
     const y = u.regGetDword(APP_KEY, L("Y")) orelse return;
     pos_x = @bitCast(x);
@@ -884,6 +895,7 @@ fn trayMenu() void {
     const menu = w.CreatePopupMenu();
     _ = w.AppendMenuW(menu, 0, 1, L("Mở Ter"));
     _ = w.AppendMenuW(menu, 0, 2, L("Quét lại file"));
+    _ = w.AppendMenuW(menu, if (dock_on) 8 else 0, 7, L("Dock (ẩn taskbar Windows)"));
     _ = w.AppendMenuW(menu, if (pinned) 8 else 0, 5, L("Luôn hiện trên desktop"));
     _ = w.AppendMenuW(menu, if (pos_set) 0 else 1, 6, L("Đặt lại vị trí"));
     _ = w.AppendMenuW(menu, if (autostartOn()) 8 else 0, 3, L("Chạy cùng Windows"));
@@ -901,6 +913,7 @@ fn trayMenu() void {
         4 => _ = w.DestroyWindow(hwnd),
         5 => setPinned(!pinned),
         6 => resetPosition(),
+        7 => setDock(!dock_on),
         else => {},
     }
 }
@@ -1033,7 +1046,12 @@ fn wndProc(h: w.H, msg: u32, wp: w.WPARAM, lp: w.LPARAM) callconv(.winapi) w.LRE
             if (contentHeight() != before) relayout() else _ = w.InvalidateRect(h, null, 0);
             return 0;
         },
+        0x0016 => { // WM_ENDSESSION: Windows is shutting down, hand the taskbar back first
+            if (wp != 0) dock.disable();
+            return 0;
+        },
         0x0002 => { // WM_DESTROY
+            dock.disable(); // restores the Windows taskbar
             _ = w.Shell_NotifyIconW(2, &nid);
             term.kill();
             w.PostQuitMessage(0);
@@ -1087,6 +1105,7 @@ fn uninstall() void {
         _ = w.RegDeleteValueW(key, L("Ter"));
         _ = w.RegCloseKey(key);
     }
+    dock.restoreTaskbar(); // in case no running copy was there to do it
     _ = w.RegDeleteKeyW(u.HKCU, u.APP_KEY);
     _ = w.RegDeleteKeyW(u.HKCU, u.UNINSTALL_KEY);
 
@@ -1188,6 +1207,9 @@ pub fn main() void {
 
     _ = w.SetTimer(hwnd, 2, 300, null);
     loadSettings();
+    dock.init(hinst, dpi);
+    dock.on_menu = &trayMenu;
+    if (dock_on) dock.enable();
     if (!hasArg(L("--hidden"))) show() else if (pinned) showResting();
 
     var msg = w.MSG{};
