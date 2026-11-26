@@ -76,3 +76,7 @@ Các máy đã cài sẽ tự nhận bản mới. Tên file đính kèm phải �
 | `src/update.zig` | Tự cập nhật từ GitHub Releases |
 | `src/setup.zig` | Bộ cài |
 | `src/w.zig`, `src/util.zig` | Khai báo Win32 và tiện ích |
+
+## Giấy phép
+
+[MIT](LICENSE): được tự do dùng, sửa, phân phối lại, kể cả cho mục đích thương mại, miễn là giữ lại thông báo bản quyền.
