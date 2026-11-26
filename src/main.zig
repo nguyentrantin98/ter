@@ -5,6 +5,7 @@ const apps = @import("apps.zig");
 const files = @import("files.zig");
 const term = @import("term.zig");
 const dock = @import("dock.zig");
+const update = @import("update.zig");
 const L = u.L;
 
 const Mode = enum(u8) { app, file, cmd, ps };
@@ -57,6 +58,7 @@ const WM_INDEXED = 0x8004;
 const WM_TDATA = 0x8005;
 const WM_TDONE = 0x8006;
 const WM_SHOWME = 0x8007;
+const WM_UPDATE = 0x8008; // wParam: update.Result
 
 const CLASS = L("TerOverlay");
 
@@ -879,6 +881,18 @@ fn makeIcon() w.H {
 
 var nid: w.NOTIFYICONDATAW = .{};
 
+/// A small notification from the tray icon after the updater installed a new version.
+fn notifyUpdated() void {
+    const title = L("Ter đã được cập nhật");
+    const text = L("Phiên bản " ++ u.VERSION);
+    var n = nid;
+    n.uFlags = 0x10; // NIF_INFO
+    @memcpy(n.szInfoTitle[0..title.len], title);
+    @memcpy(n.szInfo[0..text.len], text);
+    n.dwInfoFlags = 1; // NIIF_INFO
+    _ = w.Shell_NotifyIconW(1, &n); // NIM_MODIFY
+}
+
 fn addTray() void {
     nid.hWnd = hwnd;
     nid.uID = 1;
@@ -899,6 +913,7 @@ fn trayMenu() void {
     _ = w.AppendMenuW(menu, if (pinned) 8 else 0, 5, L("Luôn hiện trên desktop"));
     _ = w.AppendMenuW(menu, if (pos_set) 0 else 1, 6, L("Đặt lại vị trí"));
     _ = w.AppendMenuW(menu, if (autostartOn()) 8 else 0, 3, L("Chạy cùng Windows"));
+    _ = w.AppendMenuW(menu, 0, 8, L("Kiểm tra cập nhật (v" ++ u.VERSION ++ ")"));
     _ = w.AppendMenuW(menu, 0x800, 0, null);
     _ = w.AppendMenuW(menu, 0, 4, L("Thoát"));
     var pt = w.POINT{};
@@ -914,6 +929,7 @@ fn trayMenu() void {
         5 => setPinned(!pinned),
         6 => resetPosition(),
         7 => setDock(!dock_on),
+        8 => update.check(hwnd, WM_UPDATE, true),
         else => {},
     }
 }
@@ -936,7 +952,14 @@ fn registerHotkey() void {
 
 // ---------------------------------------------------------------- window
 
+/// Sent when a taskbar appears (Explorer restarted, or the Dock started collecting tray icons).
+var msg_taskbar_created: u32 = 0;
+
 fn wndProc(h: w.H, msg: u32, wp: w.WPARAM, lp: w.LPARAM) callconv(.winapi) w.LRESULT {
+    if (msg == msg_taskbar_created and msg != 0) {
+        _ = w.Shell_NotifyIconW(0, &nid); // put the tray icon back up
+        return 0;
+    }
     switch (msg) {
         0x000F => { // WM_PAINT
             var ps = w.PAINTSTRUCT{};
@@ -990,7 +1013,12 @@ fn wndProc(h: w.H, msg: u32, wp: w.WPARAM, lp: w.LPARAM) callconv(.winapi) w.LRE
             return 0;
         },
         0x0312 => return ret(toggle()), // WM_HOTKEY
-        0x0113 => { // WM_TIMER 2: pinned upkeep; 1: live progress while the disks are scanned
+        0x0113 => { // WM_TIMER 2: pinned upkeep; 3: look for updates; 1: live progress while the disks are scanned
+            if (wp == 3) {
+                _ = w.SetTimer(h, 3, 6 * 3600 * 1000, null); // then every 6 hours
+                update.check(h, WM_UPDATE, false);
+                return 0;
+            }
             if (wp == 2) {
                 keepOnDesktop();
                 return 0;
@@ -999,6 +1027,16 @@ fn wndProc(h: w.H, msg: u32, wp: w.WPARAM, lp: w.LPARAM) callconv(.winapi) w.LRE
                 if (qkey.len > 0) file_gen = files.request(qkey.items());
                 _ = w.InvalidateRect(h, null, 0);
             }
+            return 0;
+        },
+        WM_UPDATE => { // the outcome of "Kiểm tra cập nhật"
+            const msg_text = switch (@as(update.Result, @enumFromInt(wp))) {
+                .latest => L("Bạn đang dùng bản mới nhất (v" ++ u.VERSION ++ ")."),
+                .installing => return 0, // the installer takes over from here
+                .failed => L("Không kiểm tra được bản cập nhật. Hãy thử lại sau."),
+                .not_installed => L("Chỉ bản đã cài (bằng ter-setup.exe) mới tự cập nhật."),
+            };
+            _ = w.MessageBoxW(h, msg_text, L("Ter"), 0x40);
             return 0;
         },
         WM_SHOWME => { // wParam 1..4 optionally picks the mode
@@ -1200,6 +1238,7 @@ pub fn main() void {
 
     registerHotkey();
     addTray();
+    msg_taskbar_created = w.RegisterWindowMessageW(L("TaskbarCreated"));
     term.init(hwnd, WM_TDATA, WM_TDONE);
     apps.startLoad(hwnd, WM_APPS);
     files.start(hwnd, WM_FILES, WM_INDEXED);
@@ -1211,6 +1250,8 @@ pub fn main() void {
     dock.on_menu = &trayMenu;
     if (dock_on) dock.enable();
     if (!hasArg(L("--hidden"))) show() else if (pinned) showResting();
+    if (hasArg(L("--updated"))) notifyUpdated();
+    _ = w.SetTimer(hwnd, 3, 90 * 1000, null); // first look for updates once things have settled
 
     var msg = w.MSG{};
     while (w.GetMessageW(&msg, null, 0, 0) > 0) {

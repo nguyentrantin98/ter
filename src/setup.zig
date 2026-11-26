@@ -1,12 +1,13 @@
 //! ter-setup.exe — one-file installer. Carries ter.exe inside itself and installs it for the
 //! current user only (no admin): program folder, Start Menu shortcut, "Installed apps" entry,
-//! start with Windows. `--silent` skips the dialogs. Undo with `ter.exe --uninstall`.
+//! start with Windows. `--silent` skips the dialogs; `--update` (used by the updater) is
+//! silent too and starts Ter in the background. Undo with `ter.exe --uninstall`.
 const w = @import("w.zig");
 const u = @import("util.zig");
 const L = u.L;
 
 const payload = @embedFile("ter_exe");
-const VERSION = L("1.0.0");
+const VERSION = L(u.VERSION);
 
 fn hasArg(needle: []const u16) bool {
     const cl = u.sliceZ(w.GetCommandLineW());
@@ -79,7 +80,8 @@ fn createShortcut(lnk: w.WSTR, target: w.WSTR, dir: w.WSTR) bool {
 
 pub fn main() void {
     @setEvalBranchQuota(100_000); // the long dialog texts are converted to UTF-16 at compile time
-    const silent = hasArg(L("--silent"));
+    const update = hasArg(L("--update"));
+    const silent = update or hasArg(L("--silent"));
     const intro = L("Cài Ter vào máy này?\n\n" ++
         "•  Alt+Space để gọi thanh tìm kiếm\n" ++
         "•  Tự chạy cùng Windows (tắt được ở icon khay hệ thống)\n" ++
@@ -127,5 +129,6 @@ pub fn main() void {
     u.regSetStr(u.RUN_KEY, L("Ter"), u.join(&b4, &.{ L("\""), exe, L("\" --hidden") }));
 
     if (!silent) _ = w.MessageBoxW(null, L("Đã cài xong.\n\nBấm Alt+Space để mở Ter bất cứ lúc nào."), L("Cài đặt Ter"), 0x40);
-    _ = u.shell(null, exe, null, dir);
+    // after an update: back in the background, and let it say what happened
+    _ = u.shell(null, exe, if (update) L("--hidden --updated") else null, dir);
 }

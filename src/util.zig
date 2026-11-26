@@ -408,3 +408,8 @@ pub fn regSetStrZ(sub: w.WSTR, name: w.WSTR, val: [:0]const u16) void {
     defer _ = w.RegCloseKey(key);
     _ = w.RegSetValueExW(key, name, 0, 1, @ptrCast(val.ptr), @intCast((val.len + 1) * 2));
 }
+
+/// Version of this build. Releases are tagged "v" + this; installed copies update to newer tags.
+pub const VERSION = "1.1.0";
+/// GitHub repository the releases (and updates) come from.
+pub const REPO = "nguyentrantin98/ter";

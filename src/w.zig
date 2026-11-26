@@ -387,3 +387,73 @@ pub extern "user32" fn SetWindowDisplayAffinity(H, u32) callconv(.winapi) BOOL;
 pub extern "dwmapi" fn DwmFlush() callconv(.winapi) i32;
 pub extern "kernel32" fn QueryPerformanceCounter(*i64) callconv(.winapi) BOOL;
 pub extern "kernel32" fn QueryPerformanceFrequency(*i64) callconv(.winapi) BOOL;
+
+// ---- dock: full-screen detection, window previews, partial layered updates
+pub const DWM_THUMBNAIL_PROPERTIES = extern struct {
+    dwFlags: u32 = 0,
+    rcDestination: RECT = .{},
+    rcSource: RECT = .{},
+    opacity: u8 = 255,
+    fVisible: BOOL = 1,
+    fSourceClientAreaOnly: BOOL = 0,
+};
+pub const UPDATELAYEREDWINDOWINFO = extern struct {
+    cbSize: u32 = @sizeOf(UPDATELAYEREDWINDOWINFO),
+    hdcDst: H = null,
+    pptDst: ?*const POINT = null,
+    psize: ?*const SIZE = null,
+    hdcSrc: H = null,
+    pptSrc: ?*const POINT = null,
+    crKey: u32 = 0,
+    pblend: ?*const BLENDFUNCTION = null,
+    dwFlags: u32 = 0,
+    prcDirty: ?*const RECT = null,
+};
+pub extern "user32" fn UpdateLayeredWindowIndirect(H, *const UPDATELAYEREDWINDOWINFO) callconv(.winapi) BOOL;
+pub extern "user32" fn MonitorFromWindow(H, u32) callconv(.winapi) H;
+pub extern "dwmapi" fn DwmRegisterThumbnail(H, H, *H) callconv(.winapi) i32;
+pub extern "dwmapi" fn DwmUnregisterThumbnail(H) callconv(.winapi) i32;
+pub extern "dwmapi" fn DwmUpdateThumbnailProperties(H, *const DWM_THUMBNAIL_PROPERTIES) callconv(.winapi) i32;
+pub extern "dwmapi" fn DwmQueryThumbnailSourceSize(H, *SIZE) callconv(.winapi) i32;
+
+// ---- dock: system tray icons (the Dock answers Shell_NotifyIcon itself)
+pub const COPYDATASTRUCT = extern struct { dwData: usize, cbData: u32, lpData: ?*anyopaque };
+/// NOTIFYICONDATAW as it travels to the tray: handles are always 32 bits wide.
+pub const TRAY_NID = extern struct {
+    cbSize: u32,
+    hWnd: u32,
+    uID: u32,
+    uFlags: u32,
+    uCallbackMessage: u32,
+    hIcon: u32,
+    szTip: [128]u16,
+    dwState: u32,
+    dwStateMask: u32,
+    szInfo: [256]u16,
+    uVersion: u32,
+    szInfoTitle: [64]u16,
+    dwInfoFlags: u32,
+    guidItem: GUID,
+    hBalloonIcon: u32,
+};
+pub const TRAY_DATA = extern struct { dwSignature: u32, dwMessage: u32, nid: TRAY_NID };
+pub const WINEVENTPROC = *const fn (H, u32, H, i32, i32, u32, u32) callconv(.winapi) void;
+pub extern "user32" fn SendMessageTimeoutW(H, u32, WPARAM, LPARAM, u32, u32, ?*usize) callconv(.winapi) LRESULT;
+pub extern "user32" fn RegisterWindowMessageW(WSTR) callconv(.winapi) u32;
+pub extern "user32" fn IsWindow(H) callconv(.winapi) BOOL;
+pub extern "user32" fn AllowSetForegroundWindow(u32) callconv(.winapi) BOOL;
+pub extern "user32" fn GetIconInfo(H, *ICONINFO) callconv(.winapi) BOOL;
+pub extern "user32" fn SetWinEventHook(u32, u32, H, WINEVENTPROC, u32, u32, u32) callconv(.winapi) H;
+pub extern "user32" fn UnhookWinEvent(H) callconv(.winapi) BOOL;
+
+// ---- updates (WinHTTP)
+pub extern "winhttp" fn WinHttpOpen(?WSTR, u32, ?WSTR, ?WSTR, u32) callconv(.winapi) H;
+pub extern "winhttp" fn WinHttpConnect(H, WSTR, u16, u32) callconv(.winapi) H;
+pub extern "winhttp" fn WinHttpOpenRequest(H, WSTR, WSTR, ?WSTR, ?WSTR, ?*const ?WSTR, u32) callconv(.winapi) H;
+pub extern "winhttp" fn WinHttpSendRequest(H, ?WSTR, u32, ?*anyopaque, u32, u32, usize) callconv(.winapi) BOOL;
+pub extern "winhttp" fn WinHttpReceiveResponse(H, ?*anyopaque) callconv(.winapi) BOOL;
+pub extern "winhttp" fn WinHttpQueryHeaders(H, u32, ?WSTR, ?*anyopaque, *u32, ?*u32) callconv(.winapi) BOOL;
+pub extern "winhttp" fn WinHttpQueryDataAvailable(H, *u32) callconv(.winapi) BOOL;
+pub extern "winhttp" fn WinHttpReadData(H, [*]u8, u32, *u32) callconv(.winapi) BOOL;
+pub extern "winhttp" fn WinHttpSetTimeouts(H, i32, i32, i32, i32) callconv(.winapi) BOOL;
+pub extern "winhttp" fn WinHttpCloseHandle(H) callconv(.winapi) BOOL;
